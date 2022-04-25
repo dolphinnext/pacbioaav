@@ -41,4 +41,6 @@ RUN . /opt/conda/etc/profile.d/conda.sh && \
 
 RUN mkdir -p /project /nl /mnt /share
 ENV PATH /opt/conda/envs/dolphinnext/bin:$PATH
+COPY scripts/summarize_AAV_alignment.py /opt/conda/envs/dolphinnext/bin/
+COPY scripts/plotAAVreport.R /opt/conda/envs/dolphinnext/bin/
 
