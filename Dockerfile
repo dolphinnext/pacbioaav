@@ -40,8 +40,8 @@ RUN . /opt/conda/etc/profile.d/conda.sh && \
     mamba clean -a
 
 #FOR Singularity
-echo ". /opt/conda/etc/profile.d/conda.sh" >> $SINGULARITY_ENVIRONMENT
-echo "conda activate dolphinnext" >> $SINGULARITY_ENVIRONMENT
+RUN echo ". /opt/conda/etc/profile.d/conda.sh" >> $SINGULARITY_ENVIRONMENT
+RUN echo "conda activate dolphinnext" >> $SINGULARITY_ENVIRONMENT
 
 RUN mkdir -p /project /nl /mnt /share
 ENV PATH /opt/conda/envs/dolphinnext/bin:$PATH
