@@ -39,6 +39,10 @@ RUN . /opt/conda/etc/profile.d/conda.sh && \
     mamba env create -f /environment.yml && \
     mamba clean -a
 
+#FOR Singularity
+echo ". /opt/conda/etc/profile.d/conda.sh" >> $SINGULARITY_ENVIRONMENT
+echo "conda activate dolphinnext" >> $SINGULARITY_ENVIRONMENT
+
 RUN mkdir -p /project /nl /mnt /share
 ENV PATH /opt/conda/envs/dolphinnext/bin:$PATH
 COPY scripts/summarize_AAV_alignment.py /opt/conda/envs/dolphinnext/bin/
