@@ -14,7 +14,9 @@ output:
 
 script:
 """
-	minimap2 --eqx -ax splice -t 1 ${genome} ${reads} | samtools sort > ${name}.sorted_mapped.bam
+	minimap2 --eqx -ax splice -t 1 ${genome} ${reads} > ${name}.sam
+	samtools view -bS ${name}.sam > ${name}.bam
+	samtools sort ${name}.bam > ${name}.sorted_mapped.bam
 	samtools index ${name}.sorted_mapped.bam
 """
 }
@@ -23,7 +25,7 @@ script:
 process Summarize_AAV_alignment {
 
 input:
- set val(name),  file(bam) from g_0_mapped_reads0_g_1
+ set val(name),  file(bam), file(bai) from g_0_mapped_reads0_g_1
 
 output:
  file "*.csv"  into g_1_csvout00
@@ -31,8 +33,9 @@ output:
 
 script:
 """
-	python summarize_AAV_alignment.py 
-	   ${bam} ${name}
+    . /opt/conda/etc/profile.d/conda.sh
+    conda activate dolphinnext
+	summarize_AAV_alignment.py ${bam} ${name}
 	Rscript plotAAVreport.R ${name}
       
 """
