@@ -41,10 +41,8 @@ output:
 
 script:
 """
-    . /opt/conda/etc/profile.d/conda.sh
-    conda activate dolphinnext
 	summarize_AAV_alignment.py ${bam} ${name}
-	Rscript plotAAVreport.R ${name}
+	Rscript \$(which plotAAVreport.R) ${name}
       
 """
 }

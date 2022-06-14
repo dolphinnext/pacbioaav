@@ -13,23 +13,35 @@ x.err <- read.table(paste0(input.prefix, '.nonmatch_stat.csv'),sep='\t',header=T
 x.read <- read.table(paste0(input.prefix, '.per_read.csv'),sep='\t',header=T)
 
 total_num_reads <- dim(x.read)[1]
+total_wt_reads <- dim(x.summary[x.summary$map_iden==1,])[1]
+
+df.summarise_reads <- data.frame(x.summary[x.summary$is_mapped=="Y",] %>% group_by(read_len, map_start0, map_len, map_iden) %>% 
+    dplyr::summarise(count=n()))
+
+total_unique_counts<-dim(df.summarise_reads)[1]
+df.wt_uniq_counts <- data.frame(cbind(c("Total Reads", "WT Reads", "WT Reads %", "Unique Reads"),
+                                      c(total_num_reads,total_wt_reads, round(100*total_wt_reads/total_num_reads,2),
+                                        total_unique_counts)))
+colnames(df.wt_uniq_counts) <- c("Category", "Value") 
+colnames(df.summarise_reads)[5] <- "Abundance"
+df.summarise_reads$ECDF <- df.summarise_reads$Abundance/total_num_reads
+df.summarise_reads <- df.summarise_reads %>% arrange(desc(Abundance))
 
 total_err <- dim(x.err)[1]
 x.err$pos0_div <- (x.err$pos0%/%10 * 10)
-df.err <- x.err %>% group_by(pos0_div, type) %>% summarise(count=n())
+df.err <- x.err %>% group_by(pos0_div, type) %>% dplyr::summarise(count=n())
 x.err$type_len_cat <- "1-10"
 x.err[x.err$type_len>10, "type_len_cat"] <- "11-100"
 x.err[x.err$type_len>100, "type_len_cat"] <- "100-500"
 x.err[x.err$type_len>500, "type_len_cat"] <- ">500"
 x.err$type_len_cat <- ordered(x.err$type_len_cat, levels=c('1-10', '11-100', '100-500', '>500'))
-df.err_len_cat <- x.err %>% group_by(type, type_len_cat) %>% summarise(count=n()) %>% mutate(freq=round(100*count/total_err, 2))
+df.err_len_cat <- x.err %>% group_by(type, type_len_cat) %>% dplyr::summarise(count=n()) %>% mutate(freq=round(100*count/total_err, 2))
 
-df.read_stat_N <- filter(x.err,type=='N') %>% group_by(read_id) %>% summarise(max_del_size=max(type_len))
+df.read_stat_N <- filter(x.err,type=='N') %>% group_by(read_id) %>% dplyr::summarise(max_del_size=max(type_len))
 num_reads_large_del <- sum(df.read_stat_N$max_del_size>100)
 freq_reads_large_del <- round(num_reads_large_del*100/total_num_reads, 2)
 df.read_stat_N_summary <- data.frame(category=c("Total Reads", "Reads with dels >100bp"),
-                           value=c(total_num_reads, paste0(sum(df.read_stat_N$max_del_size>100), " (", freq_reads_large_del, "%)")))
-
+                                     value=c(total_num_reads, paste0(sum(df.read_stat_N$max_del_size>100), " (", freq_reads_large_del, "%)")))
 
 
 min_r_start <- min((x.summary$map_start0%/%100) * 100, na.rm=T)
@@ -37,99 +49,112 @@ if (min_r_start == 0) { min_r_start <- -100 }
 max_r_end   <- max((x.summary$map_end1%/%100+1) * 100, na.rm=T)
 
 total_read_count <- dim(x.read)[1]
-df.read <- x.read %>% group_by(assigned_type, assigned_subtype) %>% summarise(count=n()) %>% mutate(freq=round(count*100/total_read_count,2))
+df.read <- x.read %>% group_by(assigned_type, assigned_subtype) %>% dplyr::summarise(count=n()) %>% mutate(freq=round(count*100/total_read_count,2))
 
 
 p1.map_iden <- ggplot(x.summary, aes(map_iden*100)) + geom_histogram(fill='black', binwidth=0.01) +
-               xlab("Mapping Identity (%)") + ylab("Read Count") +
-               labs(title="Distribution of Mapped Identity to Reference")
+    xlab("Mapping Identity (%)") + ylab("Read Count") +
+    labs(title="Distribution of Mapped Identity to Reference")
 
 
 p1.err_dot <- ggplot(x.err, aes(x=pos0+1, y=type_len)) + geom_point(aes(color=type), alpha=0.5) +
-               xlim(c(min_r_start, max_r_end)) +
-               xlab("Reference Position") + ylab("Sub/Ins/Del Length") +
-               labs(title="Distribution of Non-Matches", subtitle="Each point is a non-match from a read")
+    xlim(c(min_r_start, max_r_end)) +
+    xlab("Reference Position") + ylab("Sub/Ins/Del Length") +
+    labs(title="Distribution of Non-Matches", subtitle="Each point is a non-match from a read")
 
 p1.err_dot_close <- ggplot(x.err, aes(x=pos0+1, y=type_len)) + geom_point(aes(color=type), alpha=0.5) +
-               xlim(c(min_r_start, max_r_end)) +
-               ylim(c(0, 100)) +
-               xlab("Reference Position") + ylab("Sub/Ins/Del Length") +
-               labs(title="Distribution of Non-Matches (of sizes <100 only)", subtitle="Each point is a non-match from a read")
+    xlim(c(min_r_start, max_r_end)) +
+    ylim(c(0, 100)) +
+    xlab("Reference Position") + ylab("Sub/Ins/Del Length") +
+    labs(title="Distribution of Non-Matches (of sizes <100 only)", subtitle="Each point is a non-match from a read")
 
 p1.err_sub <- ggplot(filter(df.err,type=='X'), aes(x=pos0_div, y=count)) + geom_bar(fill='darkgreen', stat='identity') +
-              xlim(c(min_r_start, max_r_end)) +
-              labs(title="Distribution of Non-matches by Reference Position, Substitutions",
-                   subtitle="Higher bars indicate hot spots for substitutions w.r.t reference") +
-               xlab("Reference Position") + ylab("Frequency")
+    xlim(c(min_r_start, max_r_end)) +
+    labs(title="Distribution of Non-matches by Reference Position, Substitutions",
+         subtitle="Higher bars indicate hot spots for substitutions w.r.t reference") +
+    xlab("Reference Position") + ylab("Frequency")
 
 p1.err_del <- ggplot(filter(df.err,type=='D'), aes(x=pos0_div, y=count)) + geom_bar(fill='darkred', stat='identity') +
-              xlim(c(min_r_start, max_r_end)) +
-              labs(title="Distribution of Non-matches by Reference Position, Deletions",
-                   subtitle="Higher bars indicate hot spots for deletion w.r.t reference") +
-               xlab("Reference Position") + ylab("Frequency")
+    xlim(c(min_r_start, max_r_end)) +
+    labs(title="Distribution of Non-matches by Reference Position, Deletions",
+         subtitle="Higher bars indicate hot spots for deletion w.r.t reference") +
+    xlab("Reference Position") + ylab("Frequency")
 
 p1.err_ins <- ggplot(filter(df.err,type=='I'), aes(x=pos0_div, y=count)) + geom_bar(fill='darkblue', stat='identity') +
-              xlim(c(min_r_start, max_r_end)) +
-              labs(title="Distribution of Non-matches by Reference Position, Insertions",
-                   subtitle="Higher bars indicate hot spots for insertion w.r.t reference") +
-               xlab("Reference Position") + ylab("Frequency")
+    xlim(c(min_r_start, max_r_end)) +
+    labs(title="Distribution of Non-matches by Reference Position, Insertions",
+         subtitle="Higher bars indicate hot spots for insertion w.r.t reference") +
+    xlab("Reference Position") + ylab("Frequency")
 
 p1.map_len <- ggplot(x.summary, aes(map_len)) + geom_histogram(aes(y=..count../sum(..count..))) +
-               xlab("Mapped Reference Length") + ylab("Fraction of Reads") +
-               labs(title="Distribution of Mapped Reference Length")
+    xlab("Mapped Reference Length") + ylab("Fraction of Reads") +
+    labs(title="Distribution of Mapped Reference Length")
 
 p1.map_starts <- ggplot(x.summary, aes(map_start0)) + geom_histogram(fill='orange', aes(y=..count../sum(..count..))) +
-                xlim(c(min_r_start, max_r_end)) +
-                xlab("Mapped Reference Start Position") + ylab("Fraction of Reads") +
-                labs(title="Distribution of Mapped Reference Start Position")
+    xlim(c(min_r_start, max_r_end)) +
+    xlab("Mapped Reference Start Position") + ylab("Fraction of Reads") +
+    labs(title="Distribution of Mapped Reference Start Position")
 
 p1.map_ends <- ggplot(x.summary, aes(map_end1)) + geom_histogram(fill='magenta', aes(y=..count../sum(..count..))) +
-                xlim(c(min_r_start, max_r_end)) +
-                xlab("Mapped Reference End Position") + ylab("Fraction of Reads") +
-                labs(title="Distribution of Mapped Reference End Position")
+    xlim(c(min_r_start, max_r_end)) +
+    xlab("Mapped Reference End Position") + ylab("Fraction of Reads") +
+    labs(title="Distribution of Mapped Reference End Position")
 
 
 p2.atype_violin <- ggplot(x.read, aes(x=assigned_type, y=read_len)) + geom_violin() +
-                    xlab("Assigned AAV Type") + ylab("Read Length") +
-                    labs(title="Distribution of Read Lengths by Assigned AAV Type")
+    xlab("Assigned AAV Type") + ylab("Read Length") +
+    labs(title="Distribution of Read Lengths by Assigned AAV Type")
 
 
 p3.err_Ns <- ggplot(filter(df.err,type=='N'), aes(x=pos0_div, y=count)) + geom_bar(fill='orange', stat='identity') +
-              xlim(c(min_r_start, max_r_end)) +
-              labs(title="Distribution of large deletion events (cigar 'N'), by position",
-                   subtitle="Higher bars indicate hot spots for large deletions w.r.t reference") +
-               xlab("Reference Position") + ylab("Frequency")
+    xlim(c(min_r_start, max_r_end)) +
+    labs(title="Distribution of large deletion events (cigar 'N'), by position",
+         subtitle="Higher bars indicate hot spots for large deletions w.r.t reference") +
+    xlab("Reference Position") + ylab("Frequency")
 
 p3.err_size_Ns <- ggplot(df.read_stat_N, aes(max_del_size)) + geom_histogram(binwidth=100) +
-                xlab("Maximum large deletion (cigar 'N') size") + ylab("Number of Reads") +
-                labs(title="Distribution of biggest deletion for reads that have 'N' in cigar string")
+    xlab("Maximum large deletion (cigar 'N') size") + ylab("Number of Reads") +
+    labs(title="Distribution of biggest deletion for reads that have 'N' in cigar string")
 
 
-  pdf(file=pdf.report.file, width = 6.5, height = 6.5)
+pdf(file=pdf.report.file, width = 6.5, height = 8)
 
-  #cover
-  grid.newpage()
-  cover <- textGrob("AAV Report",
-                    gp=gpar(fontface="italic", fontsize=40, col="orangered"))
-  grid.draw(cover)
-  grid.arrange(p1.map_starts, p1.map_ends, p1.map_len, ncol=1)
+#cover
+grid.newpage()
+cover <- textGrob("AAV Report",
+                  gp=gpar(fontface="italic", fontsize=40, col="orangered"))
+grid.draw(cover)
+grid.arrange(p1.map_starts, p1.map_ends, p1.map_len, ncol=1)
 
-  grid.arrange(p1.err_sub, p1.err_del, p1.err_ins, ncol=1)
-  grid.arrange(p1.map_iden, p1.err_dot, p1.err_dot_close)
+grid.arrange(p1.err_sub, p1.err_del, p1.err_ins, ncol=1)
+grid.arrange(p1.map_iden, p1.err_dot, p1.err_dot_close)
+
+table.wt_uniq_counts <- tableGrob(df.wt_uniq_counts, rows = NULL, cols = c("Category", "Value" ))
+title.wt_uniq_counts <- textGrob("WT and Unique Counts", gp=gpar(fontface="italic", fontsize=15), vjust=-18)
+gt.wt_uniq_counts <- gTree(children=gList(title.wt_uniq_counts, table.wt_uniq_counts))
+
+table.err_len_cat <- tableGrob(df.err_len_cat, rows = NULL, cols = c("Err Type", "Err Length", "Count", "Frequency (%)"))
+title.err_len_cat <- textGrob("Length Distribution of Different Non-matches", gp=gpar(fontface="italic", fontsize=15), vjust=-15)
+gt.err_len_cat <- gTree(children=gList(title.err_len_cat, table.err_len_cat))
 
 
-    table.err_len_cat <- tableGrob(df.err_len_cat, rows = NULL, cols = c("Err Type", "Err Length", "Count", "Frequency (%)"))
-    title.err_len_cat <- textGrob("Length Distribution of Different Non-matches", gp=gpar(fontface="italic", fontsize=15), vjust=-18)
-    gt.err_len_cat <- gTree(children=gList(title.err_len_cat, table.err_len_cat))
-    grid.arrange(gt.err_len_cat)
 
-  table.err_Ns_summary <- tableGrob(df.read_stat_N_summary, rows=NULL, cols=c("Category", "Count"))
-  #title.err_Ns_summary <- textGrob("Reads with large deletions (cigar 'N')", gp=gpar(fontface="italic", fontsize=15), vjust=-18)
-  #gt.err_Ns_summary <- gTree(children=gList(title.err_Ns_summary, table.err_Ns_summary))
-  grid.arrange(p3.err_Ns, p3.err_size_Ns, table.err_Ns_summary, ncol=1)
+grid.arrange(gt.wt_uniq_counts, gt.err_len_cat)
 
-    table.atype <- tableGrob(df.read, rows = NULL, cols = c("Assigned Type", "Assigned Subtype", "Count", "Frequency (%)"))
-    title.atype <- textGrob("Assigned AAV Types By Read Alignment Characteristics", gp=gpar(fontface="italic", fontsize=15), vjust=-18)
-    gt.atype <- gTree(children=gList(title.atype, table.atype))
-  grid.arrange(gt.atype, p2.atype_violin)
-  dev.off()
+
+p1.ecdf <- qplot(Abundance, ECDF, data=df.summarise_reads, 
+                 main="Empirical cumulative distribution frequency (ECDF)", stat = "ecdf", geom = "step") + 
+    theme(plot.title = element_text(hjust = 0.5))
+
+grid.arrange(p1.ecdf, ncol=1)
+
+table.err_Ns_summary <- tableGrob(df.read_stat_N_summary, rows=NULL, cols=c("Category", "Count"))
+#title.err_Ns_summary <- textGrob("Reads with large deletions (cigar 'N')", gp=gpar(fontface="italic", fontsize=15), vjust=-18)
+#gt.err_Ns_summary <- gTree(children=gList(title.err_Ns_summary, table.err_Ns_summary))
+grid.arrange(p3.err_Ns, p3.err_size_Ns, table.err_Ns_summary, ncol=1)
+
+table.atype <- tableGrob(df.read, rows = NULL, cols = c("Assigned Type", "Assigned Subtype", "Count", "Frequency (%)"))
+title.atype <- textGrob("Assigned AAV Types By Read Alignment Characteristics", gp=gpar(fontface="italic", fontsize=15), vjust=-18)
+gt.atype <- gTree(children=gList(title.atype, table.atype))
+grid.arrange(gt.atype, p2.atype_violin)
+dev.off()
